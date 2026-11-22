@@ -30,9 +30,22 @@ textarea{min-height:70px}
 .pv.bad{background:#fef2f2;color:#b91c1c}
 .photo{width:100%;max-height:260px;object-fit:contain;border-radius:8px;margin-top:8px;background:#e2e8f0}
 .el{margin:4px 0 8px;padding-left:20px;font-size:13px}
-.el li{margin:4px 0}
-.xe{-webkit-user-select:none;user-select:none;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;border-radius:6px;margin-left:8px;padding:0;width:26px;height:26px;vertical-align:middle;font-size:13px;line-height:1}
-.xe::before{content:"\2715"}
+.el li{margin:5px 0}
+.erow{display:flex;gap:8px;align-items:center}
+.erow .t{flex:1;min-width:0;line-height:1.4;word-break:break-word}
+.act{flex:none;display:flex;gap:4px}
+.act.multi{flex-direction:column}
+.xe{-webkit-user-select:none;user-select:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid #cbd5e1;background:#f8fafc;color:#475569;border-radius:6px;padding:0;width:26px;height:24px}
+.xe.del{border-color:#fecaca;background:#fef2f2;color:#dc2626}
+.xe svg{width:12px;height:12px;pointer-events:none}
+.btn:disabled{opacity:.45}
+.gr{flex:none;border:0;background:none;color:#94a3b8;width:22px;height:26px;padding:0;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;display:inline-flex;align-items:center;justify-content:center}
+.gr svg{width:16px;height:16px;pointer-events:none}
+li.dragging{background:#ccfbf1;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.25);position:relative;z-index:2}
+li.dragging .gr{cursor:grabbing}
+.dropbefore{box-shadow:0 -2px 0 #0f766e}
+.dropafter{box-shadow:0 2px 0 #0f766e}
+li.editing .t{color:#94a3b8;font-style:italic}
 .addrow{display:flex;gap:8px;align-items:flex-start}
 .addrow textarea{min-height:48px;flex:1}
 .plus{flex:none;width:48px;height:48px;border:0;border-radius:8px;background:#0f766e;color:#fff;font-size:28px;line-height:1;padding:0}
@@ -213,7 +226,57 @@ function loadSFix(){S.pts=Object.assign({},DEF.pts,S.pts);S.grade=Object.assign(
 let TAB='add';
 const F={dept:'',who:'',type:'nhac',error:'',where:'',note:'',blob:null,url:''};
 const view=$('#view');
-function setTab(t){TAB=t;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));render()}
+function applyOrder(i,order){
+  const d=S.depts[i];
+  if(order.length===d.errors.length&&order.every((t,k)=>t===d.errors[k]))return;
+  collect();
+  const rest=d.errors.filter(x=>!order.includes(x));
+  d.errors=[...order.filter(x=>d.errors.includes(x)),...rest];
+  saveS();vSet();
+}
+function enableDrag(){
+  view.querySelectorAll('.gr').forEach(g=>{
+    g.onpointerdown=e=>{
+      e.preventDefault();
+      const li=g.closest('li'),ul=li.parentNode,i=+g.dataset.gr;
+      try{g.setPointerCapture(e.pointerId)}catch(_){}
+      li.classList.add('dragging');
+      const y0=e.clientY,s0=scrollY;let y=y0,raf=0,before=null;
+      const mark=()=>{
+        ul.querySelectorAll('.dropbefore,.dropafter').forEach(x=>x.classList.remove('dropbefore','dropafter'));
+        const items=[...ul.children].filter(x=>x!==li);
+        before=null;
+        for(const it of items){const r=it.getBoundingClientRect();if(y<r.top+r.height/2){before=it;break}}
+        if(before)before.classList.add('dropbefore');else if(items.length)items[items.length-1].classList.add('dropafter');
+      };
+      const upd=()=>{li.style.transform='translateY('+((y-y0)+(scrollY-s0))+'px)';mark()};
+      const step=()=>{
+        if(y<90)scrollBy(0,-12);else if(y>innerHeight-110)scrollBy(0,12);
+        upd();raf=requestAnimationFrame(step);
+      };
+      raf=requestAnimationFrame(step);
+      const mv=ev=>{y=ev.clientY;upd()};
+      const up=()=>{
+        cancelAnimationFrame(raf);
+        g.removeEventListener('pointermove',mv);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);
+        li.classList.remove('dragging');li.style.transform='';
+        const order=[];
+        for(const it of ul.children){
+          if(it===li)continue;
+          if(it===before)order.push(li.querySelector('.t').textContent);
+          order.push(it.querySelector('.t').textContent);
+        }
+        if(!before)order.push(li.querySelector('.t').textContent);
+        ul.querySelectorAll('.dropbefore,.dropafter').forEach(x=>x.classList.remove('dropbefore','dropafter'));
+        applyOrder(i,order);
+      };
+      g.addEventListener('pointermove',mv);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up);
+    };
+  });
+}
+function fitActs(){view.querySelectorAll('.erow').forEach(r=>{const t=r.querySelector('.t'),a=r.querySelector('.act');a.classList.remove('multi');const lh=parseFloat(getComputedStyle(t).lineHeight)||18;a.classList.toggle('multi',t.getBoundingClientRect().height>lh*1.5)})}
+window.addEventListener('resize',()=>{if(TAB==='set')fitActs()});
+function setTab(t){if(t!==TAB)EDIT=null;TAB=t;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));render()}
 function render(){({add:vAdd,hist:vHist,stat:vStat,set:vSet})[TAB]()}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 
@@ -383,7 +446,7 @@ function vSet(){
     <label>Tên bộ phận</label><input class="dn" value="${esc(d.name)}">
     <label>Nhân viên (mỗi dòng một tên)</label><textarea class="ds">${esc(d.staff.join('\n'))}</textarea>
     <label>Các loại lỗi (mỗi dòng một mục)</label>
-    <ul class="el">${d.errors.map((er,j)=>`<li>${esc(er)}<button type="button" class="xe" data-xe="${i}:${j}" aria-label="Xoá lỗi"></button></li>`).join('')||'<li class="small" style="list-style:none;margin-left:-18px">Chưa có lỗi nào</li>'}</ul>
+    <ul class="el">${d.errors.map((er,j)=>`<li class="${EDIT&&EDIT.i===i&&EDIT.text===er?'editing':''}"><div class="erow"><button type="button" class="gr" data-gr="${i}" aria-label="Kéo để di chuyển"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.8"/><circle cx="15" cy="6" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="18" r="1.8"/><circle cx="15" cy="18" r="1.8"/></svg></button><span class="t">${esc(er)}</span><span class="act"><button type="button" class="xe ed" data-ed="${i}:${j}" aria-label="Sửa lỗi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button type="button" class="xe del" data-xe="${i}:${j}" aria-label="Xoá lỗi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div></li>`).join('')||'<li class="small" style="list-style:none;margin-left:-18px">Chưa có lỗi nào</li>'}</ul>
     <div class="addrow"><textarea class="de" placeholder="Nhập lỗi mới, mỗi dòng một lỗi, rồi bấm +"></textarea><button class="plus" data-pe="${i}" aria-label="Thêm lỗi">+</button></div>
     <button class="btn sm red" data-rm="${i}">Xoá bộ phận này</button></div>`).join('')}</div>
   <button class="btn sm sec" id="addd">+ Thêm bộ phận</button></div>
@@ -399,6 +462,7 @@ function vSet(){
   <div><label>Loại C từ điểm</label><input id="gc" type="number" value="${S.grade.C}"></div></div>
   <div class="small" style="margin-top:6px">"Lần nhắc" được đếm theo từng người + từng loại lỗi trong cùng tháng.</div>
   <label>Mã PIN mở app (để trống = không khoá)</label><input id="pinset" type="password" inputmode="numeric" placeholder="${S.pin?'Đã đặt – nhập mã mới để đổi':'Chưa đặt'}">
+  <button type="button" class="btn sec" id="pinclr" style="margin-top:8px"${S.pin?'':' disabled'}>Xóa PIN</button>
   <button class="btn" id="ss">Lưu cài đặt</button></div>
   <div class="card"><h3>Sao lưu / khôi phục</h3>
   <div class="small">Dữ liệu chỉ nằm trong điện thoại này. Nên sao lưu mỗi tuần và chép file sang máy tính.${S.lastBackup?' Lần gần nhất: '+fmt(S.lastBackup)+'.':''}</div>
@@ -407,20 +471,41 @@ function vSet(){
   <input type="file" id="rsf" accept=".json,application/json" hidden>
   <button class="btn sm red" id="wipe">Xoá toàn bộ ghi nhận</button></div>
   <div class="small" style="text-align:center">Dung lượng ảnh đã nén: ${(RECS.reduce((s,r)=>s+(r.photo?r.photo.size:0),0)/1048576).toFixed(1)} MB · ${RECS.length} ghi nhận</div>`;
-  $('#addd').onclick=()=>{collect();S.depts.push({id:'d'+Date.now(),name:'Bộ phận mới',staff:[],errors:['Lỗi khác']});saveS();vSet()};
-  view.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Xoá bộ phận này khỏi danh sách? (Ghi nhận cũ vẫn giữ.)')){collect();S.depts.splice(+b.dataset.rm,1);saveS();vSet()}});
+  $('#addd').onclick=()=>{collect();EDIT=null;S.depts.push({id:'d'+Date.now(),name:'Bộ phận mới',staff:[],errors:['Lỗi khác']});saveS();vSet()};
+  view.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Xoá bộ phận này khỏi danh sách? (Ghi nhận cũ vẫn giữ.)')){collect();EDIT=null;S.depts.splice(+b.dataset.rm,1);saveS();vSet()}});
   view.querySelectorAll('[data-pe]').forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.pe;
     const ta=b.closest('[data-i]').querySelector('.de');
     if(!ta.value.trim()){toast('Hãy nhập lỗi vào ô trước khi bấm +');return}
-    const before=S.depts[+b.dataset.pe].errors.length;
+    const was=!!(EDIT&&EDIT.i===i),before=S.depts[i].errors.length;
     collect();saveS();
-    toast('Đã thêm '+(S.depts[+b.dataset.pe].errors.length-before)+' lỗi');vSet();
+    toast(was?'Đã cập nhật lỗi':'Đã thêm '+(S.depts[i].errors.length-before)+' lỗi');vSet();
   });
   view.querySelectorAll('[data-xe]').forEach(a=>a.onclick=e=>{
-    e.preventDefault();collect();
+    e.preventDefault();
     const [i,j]=a.dataset.xe.split(':').map(Number);
-    S.depts[i].errors.splice(j,1);saveS();vSet();
+    const txt=S.depts[i].errors[j];
+    collect();
+    const k=S.depts[i].errors.indexOf(txt);if(k>=0)S.depts[i].errors.splice(k,1);
+    saveS();vSet();
   });
+  view.querySelectorAll('[data-ed]').forEach(a=>a.onclick=e=>{
+    e.preventDefault();
+    const [i,j]=a.dataset.ed.split(':').map(Number);
+    const txt=S.depts[i].errors[j];
+    collect();saveS();
+    EDIT={i,text:txt};vSet();
+  });
+  if(EDIT){
+    const box=view.querySelector('#dl [data-i="'+EDIT.i+'"]');
+    if(box){const ta=box.querySelector('.de');ta.value=EDIT.text;ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ta.scrollIntoView({block:'center'})}
+  }
+  enableDrag();fitActs();
+  $('#pinclr').onclick=()=>{
+    if(!S.pin){toast('Chưa đặt mã PIN');return}
+    if(!confirm('Xoá mã PIN? Sau đó app sẽ mở mà không cần mã.'))return;
+    collect();S.pin='';saveS();toast('Đã xoá mã PIN');vSet();
+  };
   $('#ss').onclick=async()=>{
     collect();
     const n=id=>parseFloat($(id).value);
@@ -435,6 +520,8 @@ function vSet(){
     try{await restore(f);toast('Đã khôi phục');vSet()}catch(err){toast('Lỗi: '+err.message)}};
   $('#wipe').onclick=async()=>{if(confirm('Xoá TOÀN BỘ ghi nhận và ảnh? Hãy sao lưu trước. Không thể khôi phục.')&&confirm('Chắc chắn xoá hết?')){await dbClear();await reload();toast('Đã xoá');vSet()}};
 }
+let EDIT=null;
+const cleanErr=s=>s.replace(/^[\s\-*\u2022\u00b7\u2013]+/,'').replace(/\s*\u2715\s*$/,'').trim();
 function collect(){
   view.querySelectorAll('#dl [data-i]').forEach(el=>{
     const d=S.depts[+el.dataset.i];if(!d)return;
@@ -442,7 +529,19 @@ function collect(){
     const lines=t=>t.split('\n').map(s=>s.trim()).filter(Boolean);
     d.staff=lines(el.querySelector('.ds').value);
     const de=el.querySelector('.de');
-    for(const x of lines(de.value).map(s=>s.replace(/^[\s\-*\u2022\u00b7\u2013]+/,'').replace(/\s*\u2715\s*$/,'').trim()).filter(Boolean)){if(!d.errors.some(y=>y.toLowerCase()===x.toLowerCase()))d.errors.push(x)}
+    const nl=lines(de.value).map(cleanErr).filter(Boolean);
+    const idx=+el.dataset.i;
+    const pos=(EDIT&&EDIT.i===idx)?d.errors.indexOf(EDIT.text):-1;
+    if(pos>=0){
+      if(nl.length){
+        const others=new Set(d.errors.filter((_,k)=>k!==pos).map(y=>y.toLowerCase()));
+        const fresh=[];for(const x of nl){const k=x.toLowerCase();if(!others.has(k)&&!fresh.some(y=>y.toLowerCase()===k))fresh.push(x)}
+        d.errors.splice(pos,1,...fresh);
+      }
+      EDIT=null;
+    }else{
+      for(const x of nl){if(!d.errors.some(y=>y.toLowerCase()===x.toLowerCase()))d.errors.push(x)}
+    }
     de.value='';
   });
 }
