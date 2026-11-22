@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Nhật ký KSNK</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f1f5f4;color:#0f172a;padding-bottom:72px}
+header{background:#0f766e;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:5;font-weight:600;font-size:18px}
+main{padding:12px;max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #cbd5e1;z-index:5}
+nav button{flex:1;border:0;background:none;padding:10px 0 12px;font-size:13px;color:#64748b}
+nav button.on{color:#0f766e;font-weight:700;border-top:3px solid #0f766e;padding-top:7px}
+.card{background:#fff;border-radius:12px;padding:12px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+label{display:block;font-size:13px;color:#475569;margin:10px 0 4px}
+select,input,textarea{width:100%;font:inherit;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff}
+textarea{min-height:70px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{flex:1 1 45%;padding:12px 6px;border:2px solid #cbd5e1;border-radius:10px;background:#fff;font:inherit;font-weight:600;text-align:center}
+.btn{display:block;width:100%;padding:14px;border:0;border-radius:10px;background:#0f766e;color:#fff;font:inherit;font-weight:700;margin-top:12px}
+.btn.sec{background:#e2e8f0;color:#0f172a}
+.btn.red{background:#dc2626}
+.btn.sm{display:inline-block;width:auto;padding:8px 12px;margin:4px 4px 0 0;font-size:14px}
+.pv{font-weight:600;padding:8px 10px;border-radius:8px;background:#ecfdf5;margin-top:10px}
+.pv.bad{background:#fef2f2;color:#b91c1c}
+.photo{width:100%;max-height:260px;object-fit:contain;border-radius:8px;margin-top:8px;background:#e2e8f0}
+.rec{display:flex;gap:10px}
+.rec img{width:64px;height:64px;object-fit:cover;border-radius:8px;flex:none}
+.rec .b{flex:1;min-width:0}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;color:#fff;font-size:12px;font-weight:600}
+.small{font-size:13px;color:#64748b}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:6px 4px;border-bottom:1px solid #e2e8f0;text-align:left}
+td.n,th.n{text-align:right}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 16px;border-radius:99px;z-index:20;font-size:14px}
+.warn{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px;margin-bottom:12px;font-size:14px}
+#ov{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:30;display:none;align-items:center;justify-content:center}
+#ov img{max-width:100%;max-height:100%}
+#lock{position:fixed;inset:0;background:#0f766e;z-index:40;display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:12px;padding:24px}
+#lock input{max-width:220px;text-align:center;font-size:22px}
+h3{margin:4px 0 8px;font-size:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+</style>
+</head>
+<body>
+<header id="hd">Nhật ký KSNK</header>
+<main id="view"></main>
+<nav id="nav">
+  <button data-t="add">Ghi nhận</button>
+  <button data-t="hist">Lịch sử</button>
+  <button data-t="stat">Thống kê</button>
+  <button data-t="set">Cài đặt</button>
+</nav>
+<div id="ov"><img id="ovimg" alt=""></div>
+<div id="lock">
+  <div style="font-size:20px;font-weight:700">Nhập mã PIN</div>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+  <button class="btn sec" style="max-width:220px" id="pinok">Mở</button>
+  <div id="pinerr"></div>
+</div>
+<script>
+'use strict';
+/* ---------- tiện ích ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad2=n=>String(n).padStart(2,'0');
+const mkey=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+pad2(d.getMonth()+1)};
+const fmt=ts=>{const d=new Date(ts);return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear()+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())};
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+/* ---------- cài đặt mặc định ---------- */
+const GENERAL='(Chung cả bộ phận)';
+const DEF={
+  depts:[
+    {id:'d1',name:'Ngoại cảnh',staff:[],errors:['Rác, lá cây chưa thu gom','Khu vực tập kết rác chưa sạch','Thùng rác không đậy nắp','Không mang phương tiện bảo hộ']},
+    {id:'d2',name:'Nhà giặt',staff:[],errors:['Không phân luồng sạch/bẩn','Không mang phương tiện bảo hộ','Đồ vải sạch để sai nơi quy định','Sai quy trình giặt']},
+    {id:'d3',name:'Xử lý dụng cụ',staff:[],errors:['Sai quy trình rửa/khử khuẩn/tiệt khuẩn','Không mang phương tiện bảo hộ','Phân loại dụng cụ chưa đúng','Không ghi sổ/chỉ thị kiểm soát']},
+    {id:'d4',name:'Vệ sinh bề mặt (công ty)',staff:[],errors:['Bề mặt chưa sạch','Pha hoá chất sai nồng độ','Không thay găng/khăn đúng quy định','Phân loại rác sai']},
+    {id:'d5',name:'Công tác KSNK (khoa phòng)',staff:[],errors:['Không vệ sinh tay đúng thời điểm','Không dùng phương tiện bảo hộ đúng','Xử lý chất thải sai','Vi phạm khác về KSNK']}
+  ],
+  pts:{n1:1,n2:2,n3:3,nang:5,tot:1},
+  grade:{A:90,B:80,C:70},
+  base:100,
+  pin:'',
+  lastBackup:0
+};
+let S;
+function loadS(){try{S=JSON.parse(localStorage.getItem('ksnk_set')||'null')}catch(e){S=null}
+  if(!S)S=JSON.parse(JSON.stringify(DEF));
+  S.pts=Object.assign({},DEF.pts,S.pts);S.grade=Object.assign({},DEF.grade,S.grade);
+  if(typeof S.base!=='number')S.base=100;}
+function saveS(){localStorage.setItem('ksnk_set',JSON.stringify(S))}
+loadS();
+
+/* ---------- IndexedDB ---------- */
+let DB;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('ksnk',1);
+  r.onupgradeneeded=()=>{r.result.createObjectStore('rec',{keyPath:'id'})};
+  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
+const tx=(m)=>DB.transaction('rec',m).objectStore('rec');
+const dbAll=()=>new Promise((res,rej)=>{const q=tx('readonly').getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});
+const dbPut=r=>new Promise((res,rej)=>{const q=tx('readwrite').put(r);q.onsuccess=()=>res();q.onerror=()=>rej(q.error)});
+const dbDel=id=>new Promise((res,rej)=>{const q=tx('readwrite').delete(id);q.onsuccess=()=>res();q.onerror=()=>rej(q.error)});
+const dbClear=()=>new Promise((res,rej)=>{const q=tx('readwrite').clear();q.onsuccess=()=>res();q.onerror=()=>rej(q.error)});
+let RECS=[];
+async function reload(){RECS=(await dbAll()).sort((a,b)=>b.ts-a.ts)}
+
+/* ---------- loại ghi nhận & điểm ---------- */
+const TYPES=[['dat','Đạt','#16a34a'],['nhac','Nhắc nhở','#d97706'],['nang','Vi phạm nặng','#dc2626'],['tot','Làm tốt (+điểm)','#0891b2'],['ghi','Đề xuất / ghi chú','#2563eb']];
+const tinfo=k=>TYPES.find(t=>t[0]===k)||TYPES[0];
+function calc(type,dept,who,error,ts){
+  const P=S.pts;let count=0,pts=0;
+  const same=RECS.filter(r=>(r.type==='nhac'||r.type==='nang')&&r.dept===dept&&r.who===who&&r.error===error&&mkey(r.ts)===mkey(ts));
+  if(type==='nhac'){count=same.length+1;pts=-(count===1?P.n1:count===2?P.n2:P.n3)}
+  else if(type==='nang'){count=same.length+1;pts=-P.nang}
+  else if(type==='tot'){pts=P.tot}
+  return {count,pts};
+}
+function gradeOf(score){const g=S.grade;return score>=g.A?'A':score>=g.B?'B':score>=g.C?'C':'D'}
+
+/* ---------- nén ảnh + đóng dấu giờ ---------- */
+function compress(file){return new Promise((res,rej)=>{
+  const img=new Image(),u=URL.createObjectURL(file);
+  img.onload=()=>{
+    const M=1280,k=Math.min(1,M/Math.max(img.width,img.height));
+    const w=Math.round(img.width*k),h=Math.round(img.height*k);
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    const x=c.getContext('2d');x.drawImage(img,0,0,w,h);
+    const t=fmt(Date.now()),fs=Math.max(16,Math.round(w/36)),p=8;
+    x.font='bold '+fs+'px sans-serif';
+    const tw=x.measureText(t).width;
+    x.fillStyle='rgba(0,0,0,.55)';x.fillRect(0,h-fs-2*p,tw+2*p,fs+2*p);
+    x.fillStyle='#fff';x.textBaseline='top';x.fillText(t,p,h-fs-p);
+    c.toBlob(b=>{URL.revokeObjectURL(u);b?res(b):rej(new Error('blob'))},'image/jpeg',0.7)};
+  img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('img'))};
+  img.src=u})}
+
+/* ---------- ZIP (không nén) ---------- */
+const CT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CT[(c^u8[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+function makeZip(files){
+  const enc=new TextEncoder(),parts=[],cent=[];let off=0;
+  const n=new Date(),dt=(n.getHours()<<11)|(n.getMinutes()<<5)|(n.getSeconds()>>1),dd=((n.getFullYear()-1980)<<9)|((n.getMonth()+1)<<5)|n.getDate();
+  for(const f of files){
+    const nm=enc.encode(f.name),len=f.data.length,c=crc32(f.data);
+    const L=new DataView(new ArrayBuffer(30));
+    L.setUint32(0,0x04034b50,true);L.setUint16(4,20,true);L.setUint16(6,0x0800,true);L.setUint16(8,0,true);
+    L.setUint16(10,dt,true);L.setUint16(12,dd,true);L.setUint32(14,c,true);L.setUint32(18,len,true);L.setUint32(22,len,true);
+    L.setUint16(26,nm.length,true);L.setUint16(28,0,true);
+    parts.push(L.buffer,nm,f.data);
+    const C=new DataView(new ArrayBuffer(46));
+    C.setUint32(0,0x02014b50,true);C.setUint16(4,20,true);C.setUint16(6,20,true);C.setUint16(8,0x0800,true);C.setUint16(10,0,true);
+    C.setUint16(12,dt,true);C.setUint16(14,dd,true);C.setUint32(16,c,true);C.setUint32(20,len,true);C.setUint32(24,len,true);
+    C.setUint16(28,nm.length,true);C.setUint32(42,off,true);
+    cent.push(C.buffer,nm);
+    off+=30+nm.length+len;
+  }
+  let cs=0;for(const p of cent)cs+=p.byteLength;
+  const E=new DataView(new ArrayBuffer(22));
+  E.setUint32(0,0x06054b50,true);E.setUint16(8,files.length,true);E.setUint16(10,files.length,true);E.setUint32(12,cs,true);E.setUint32(16,off,true);
+  return new Blob([...parts,...cent,E.buffer],{type:'application/zip'});
+}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000)}
+
+/* ---------- xuất dữ liệu ---------- */
+const csvCell=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+function csvOf(list){
+  const head=['Ngày giờ','Bộ phận','Đối tượng','Vị trí','Loại','Nội dung','Lần','Điểm','Ghi chú','Tệp ảnh'];
+  const rows=list.map(r=>[fmt(r.ts),r.dept,r.who,r.where,tinfo(r.type)[1],r.error,r.count||'',r.pts,r.note,r.photo?r.id+'.jpg':'']);
+  return '﻿'+[head,...rows].map(a=>a.map(csvCell).join(',')).join('\r\n');
+}
+function sel(month){return month==='all'?RECS.slice().reverse():RECS.filter(r=>mkey(r.ts)===month).reverse()}
+async function exportCSV(month){download(new Blob([csvOf(sel(month))],{type:'text/csv;charset=utf-8'}),'KSNK_nhac_nho_'+month+'.csv')}
+async function exportZip(month){
+  const list=sel(month);const files=[];
+  files.push({name:'danh_sach.csv',data:new TextEncoder().encode(csvOf(list))});
+  for(const r of list){if(r.photo)files.push({name:'anh/'+r.id+'.jpg',data:new Uint8Array(await r.photo.arrayBuffer())})}
+  download(makeZip(files),'KSNK_anh_va_danh_sach_'+month+'.zip');
+}
+function b2d(b){return new Promise(res=>{const f=new FileReader();f.onload=()=>res(f.result);f.readAsDataURL(b)})}
+async function backup(){
+  const out={v:1,settings:S,records:[]};
+  for(const r of RECS){const c=Object.assign({},r);c.photo=r.photo?await b2d(r.photo):null;out.records.push(c)}
+  download(new Blob([JSON.stringify(out)],{type:'application/json'}),'KSNK_sao_luu_'+new Date().toISOString().slice(0,10)+'.json');
+  S.lastBackup=Date.now();saveS();
+}
+async function restore(file){
+  const d=JSON.parse(await file.text());
+  if(!d||!Array.isArray(d.records))throw new Error('Tệp không hợp lệ');
+  await dbClear();
+  for(const r of d.records){if(r.photo)r.photo=await (await fetch(r.photo)).blob();await dbPut(r)}
+  if(d.settings){S=d.settings;loadSFix();saveS()}
+  await reload();
+}
+function loadSFix(){S.pts=Object.assign({},DEF.pts,S.pts);S.grade=Object.assign({},DEF.grade,S.grade);if(typeof S.base!=='number')S.base=100}
+
+/* ---------- giao diện ---------- */
+let TAB='add';
+const F={dept:'',who:'',type:'nhac',error:'',where:'',note:'',blob:null,url:''};
+const view=$('#view');
+function setTab(t){TAB=t;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));render()}
+function render(){({add:vAdd,hist:vHist,stat:vStat,set:vSet})[TAB]()}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+
+function months(){const s=new Set([mkey(Date.now())]);RECS.forEach(r=>s.add(mkey(r.ts)));return [...s].sort().reverse()}
+function backupBanner(){
+  if(!RECS.length)return '';
+  const days=S.lastBackup?Math.floor((Date.now()-S.lastBackup)/864e5):999;
+  if(days<7)return '';
+  return '<div class="warn">Chưa sao lưu '+(S.lastBackup?days+' ngày':'lần nào')+'. Vào <b>Cài đặt → Sao lưu</b> để tránh mất dữ liệu khi đổi hoặc mất điện thoại.</div>';
+}
+
+function vAdd(){
+  if(!S.depts.length){view.innerHTML='<div class="card">Chưa có bộ phận. Vào Cài đặt để thêm.</div>';return}
+  if(!S.depts.find(d=>d.id===F.dept)){F.dept=S.depts[0].id;F.who='';F.error=''}
+  const D=S.depts.find(d=>d.id===F.dept);
+  const people=[GENERAL,...D.staff];
+  if(!people.includes(F.who))F.who=people[0];
+  const needErr=F.type==='nhac'||F.type==='nang';
+  const errs=[...D.errors,'Khác'];
+  if(!errs.includes(F.error))F.error=errs[0];
+  const c=calc(F.type,D.name,F.who,needErr?F.error:'',Date.now());
+  let pv='';
+  if(F.type==='nhac')pv='Nhắc lần '+c.count+' trong tháng → '+c.pts+' điểm';
+  else if(F.type==='nang')pv='Vi phạm nặng (lần '+c.count+') → '+c.pts+' điểm';
+  else if(F.type==='tot')pv='Cộng '+c.pts+' điểm';
+  else pv='Không tính điểm';
+  view.innerHTML=backupBanner()+`<div class="card">
+  <label>Bộ phận</label><select id="fd">${S.depts.map(d=>`<option value="${d.id}" ${d.id===F.dept?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
+  <label>Đối tượng</label><select id="fw">${people.map(p=>`<option ${p===F.who?'selected':''}>${esc(p)}</option>`).join('')}</select>
+  <label>Loại</label><div class="chips">${TYPES.map(t=>`<button class="chip" data-ty="${t[0]}" style="${F.type===t[0]?`border-color:${t[2]};background:${t[2]}22;color:${t[2]}`:''}">${t[1]}</button>`).join('')}</div>
+  ${needErr?`<label>Nội dung lỗi</label><select id="fe">${errs.map(e=>`<option ${e===F.error?'selected':''}>${esc(e)}</option>`).join('')}</select>`:''}
+  <label>Vị trí / khoa phòng</label><input id="fp" value="${esc(F.where)}" placeholder="VD: Khoa Nội, hành lang tầng 2">
+  <label>Ghi chú / hướng dẫn đã nhắc</label><textarea id="fn">${esc(F.note)}</textarea>
+  <input id="ph" type="file" accept="image/*" capture="environment" hidden>
+  <button class="btn sec" id="phb">${F.blob?'Chụp lại ảnh':'Chụp ảnh'}</button>
+  ${F.url?`<img class="photo" src="${F.url}" alt="">`:''}
+  <div class="pv ${c.pts<0?'bad':''}">${esc(pv)}</div>
+  <button class="btn" id="sv">Lưu ghi nhận</button></div>`;
+  const sync=()=>{F.where=$('#fp').value;F.note=$('#fn').value};
+  $('#fd').onchange=e=>{sync();F.dept=e.target.value;F.who='';F.error='';vAdd()};
+  $('#fw').onchange=e=>{sync();F.who=e.target.value;vAdd()};
+  view.querySelectorAll('[data-ty]').forEach(b=>b.onclick=()=>{sync();F.type=b.dataset.ty;vAdd()});
+  if($('#fe'))$('#fe').onchange=e=>{sync();F.error=e.target.value;vAdd()};
+  $('#phb').onclick=()=>$('#ph').click();
+  $('#ph').onchange=async e=>{
+    const f=e.target.files[0];if(!f)return;sync();
+    try{F.blob=await compress(f);if(F.url)URL.revokeObjectURL(F.url);F.url=URL.createObjectURL(F.blob);vAdd()}
+    catch(err){toast('Không đọc được ảnh')}
+  };
+  $('#sv').onclick=async()=>{
+    sync();
+    const ts=Date.now(),err=needErr?F.error:'';
+    const k=calc(F.type,D.name,F.who,err,ts);
+    const rec={id:ts+'-'+Math.random().toString(36).slice(2,6),ts,dept:D.name,who:F.who,where:F.where.trim(),type:F.type,error:err,note:F.note.trim(),photo:F.blob,count:k.count,pts:k.pts};
+    try{await dbPut(rec);await reload()}catch(e){toast('Lỗi lưu: '+e.message);return}
+    if(F.url)URL.revokeObjectURL(F.url);
+    F.blob=null;F.url='';F.note='';F.where='';
+    toast('Đã lưu');vAdd();
+  };
+}
+
+function vHist(){
+  const ms=months();if(!HM||(HM!=='all'&&!ms.includes(HM)))HM=ms[0];
+  const ds=[...new Set(RECS.map(r=>r.dept))];
+  const list=RECS.filter(r=>(HM==='all'||mkey(r.ts)===HM)&&(!HD||r.dept===HD));
+  view.innerHTML=`<div class="card grid2">
+    <select id="hm"><option value="all" ${HM==='all'?'selected':''}>Tất cả</option>${ms.map(m=>`<option ${m===HM?'selected':''}>${m}</option>`).join('')}</select>
+    <select id="hd"><option value="">Mọi bộ phận</option>${ds.map(d=>`<option ${d===HD?'selected':''}>${esc(d)}</option>`).join('')}</select></div>
+    <div class="small" style="margin:0 4px 8px">${list.length} ghi nhận</div>
+    ${list.map(r=>{const t=tinfo(r.type);return `<div class="card rec" data-id="${esc(r.id)}">
+      ${r.photo?`<img data-photo="${esc(r.id)}" alt="">`:''}
+      <div class="b"><span class="tag" style="background:${t[2]}">${t[1]}</span> <span class="small">${fmt(r.ts)}</span>
+      <div><b>${esc(r.who)}</b> · ${esc(r.dept)}</div>
+      ${r.error?`<div>${esc(r.error)}${r.count?` (lần ${r.count})`:''}</div>`:''}
+      ${r.where?`<div class="small">Vị trí: ${esc(r.where)}</div>`:''}
+      ${r.note?`<div class="small">${esc(r.note)}</div>`:''}
+      <div class="small">Điểm: <b>${r.pts>0?'+':''}${r.pts}</b> · <a href="#" data-del="${esc(r.id)}" style="color:#dc2626">Xoá</a></div></div></div>`}).join('')}`;
+  $('#hm').onchange=e=>{HM=e.target.value;vHist()};
+  $('#hd').onchange=e=>{HD=e.target.value;vHist()};
+  view.querySelectorAll('[data-photo]').forEach(im=>{const r=RECS.find(x=>x.id===im.dataset.photo);const u=URL.createObjectURL(r.photo);im.src=u;im.onload=()=>{};im.onclick=()=>{$('#ovimg').src=u;$('#ov').style.display='flex'}});
+  view.querySelectorAll('[data-del]').forEach(a=>a.onclick=async e=>{e.preventDefault();if(confirm('Xoá ghi nhận này? Không thể khôi phục.')){await dbDel(a.dataset.del);await reload();vHist()}});
+}
+let HM='',HD='';
+$('#ov').onclick=()=>{$('#ov').style.display='none';$('#ovimg').src=''};
+
+function statsOf(list){
+  const m=new Map();
+  for(const r of list){
+    const k=r.dept+'\u0001'+r.who;
+    if(!m.has(k))m.set(k,{dept:r.dept,who:r.who,nhac:0,nang:0,tot:0,pts:0});
+    const o=m.get(k);
+    if(r.type==='nhac')o.nhac++;else if(r.type==='nang')o.nang++;else if(r.type==='tot')o.tot++;
+    o.pts+=r.pts||0;
+  }
+  return [...m.values()].map(o=>(o.score=S.base+o.pts,o.grade=gradeOf(o.score),o)).sort((a,b)=>a.score-b.score);
+}
+let SM='';
+function vStat(){
+  const ms=months();if(!SM||(SM!=='all'&&!ms.includes(SM)))SM=ms[0];
+  const list=sel(SM);
+  const st=statsOf(list);
+  const byErr={};list.filter(r=>r.type==='nhac'||r.type==='nang').forEach(r=>{const k=r.dept+' – '+r.error;byErr[k]=(byErr[k]||0)+1});
+  const errs=Object.entries(byErr).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const depts={};list.forEach(r=>{const d=depts[r.dept]||(depts[r.dept]={nhac:0,nang:0,tot:0,dat:0,ghi:0});d[r.type]++});
+  view.innerHTML=`<div class="card"><select id="sm"><option value="all" ${SM==='all'?'selected':''}>Tất cả thời gian</option>${ms.map(m=>`<option ${m===SM?'selected':''}>${m}</option>`).join('')}</select>
+    <div class="small" style="margin-top:6px">Điểm gốc ${S.base}. Loại A ≥${S.grade.A}, B ≥${S.grade.B}, C ≥${S.grade.C}, còn lại D.</div></div>
+  <div class="card"><h3>Theo bộ phận</h3><table><tr><th>Bộ phận</th><th class="n">Nhắc</th><th class="n">Nặng</th><th class="n">Tốt</th><th class="n">Đạt</th></tr>
+  ${Object.entries(depts).map(([k,d])=>`<tr><td>${esc(k)}</td><td class="n">${d.nhac}</td><td class="n">${d.nang}</td><td class="n">${d.tot}</td><td class="n">${d.dat}</td></tr>`).join('')||'<tr><td colspan="5" class="small">Chưa có dữ liệu</td></tr>'}</table></div>
+  <div class="card"><h3>Theo người (điểm thấp lên trước)</h3><table><tr><th>Đối tượng</th><th class="n">Nhắc</th><th class="n">Nặng</th><th class="n">Điểm</th><th class="n">Loại</th></tr>
+  ${st.map(o=>`<tr><td>${esc(o.who)}<div class="small">${esc(o.dept)}</div></td><td class="n">${o.nhac}</td><td class="n">${o.nang}</td><td class="n">${o.score}</td><td class="n"><b>${o.grade}</b></td></tr>`).join('')||'<tr><td colspan="5" class="small">Chưa có dữ liệu</td></tr>'}</table></div>
+  <div class="card"><h3>Lỗi hay gặp</h3>${errs.map(([k,n])=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #e2e8f0"><span>${esc(k)}</span><b>${n}</b></div>`).join('')||'<div class="small">Chưa có</div>'}</div>
+  <div class="card"><h3>Xuất để báo cáo / họp</h3>
+  <button class="btn sm" id="x1">Danh sách (Excel .csv)</button>
+  <button class="btn sm sec" id="x2">Ảnh + danh sách (.zip)</button></div>`;
+  $('#sm').onchange=e=>{SM=e.target.value;vStat()};
+  $('#x1').onclick=()=>exportCSV(SM);
+  $('#x2').onclick=async()=>{toast('Đang nén ảnh...');await exportZip(SM)};
+}
+
+function vSet(){
+  view.innerHTML=`<div class="card"><h3>Bộ phận, nhân viên, danh mục lỗi</h3>
+  <div class="small">Mỗi dòng một mục. Nhân viên có thể nhập sau, hoặc chọn "(Chung cả bộ phận)".</div>
+  <div id="dl">${S.depts.map((d,i)=>`<div style="border-top:1px solid #e2e8f0;margin-top:10px;padding-top:6px" data-i="${i}">
+    <label>Tên bộ phận</label><input class="dn" value="${esc(d.name)}">
+    <label>Nhân viên (mỗi dòng một tên)</label><textarea class="ds">${esc(d.staff.join('\n'))}</textarea>
+    <label>Các loại lỗi (mỗi dòng một mục)</label><textarea class="de" style="min-height:110px">${esc(d.errors.join('\n'))}</textarea>
+    <button class="btn sm red" data-rm="${i}">Xoá bộ phận này</button></div>`).join('')}</div>
+  <button class="btn sm sec" id="addd">+ Thêm bộ phận</button></div>
+  <div class="card"><h3>Thang điểm</h3>
+  <div class="grid2"><div><label>Điểm gốc mỗi tháng</label><input id="pb" type="number" value="${S.base}"></div>
+  <div><label>Nhắc lần 1 trừ</label><input id="p1" type="number" value="${S.pts.n1}"></div>
+  <div><label>Nhắc lần 2 trừ</label><input id="p2" type="number" value="${S.pts.n2}"></div>
+  <div><label>Nhắc lần 3+ trừ</label><input id="p3" type="number" value="${S.pts.n3}"></div>
+  <div><label>Vi phạm nặng trừ</label><input id="pn" type="number" value="${S.pts.nang}"></div>
+  <div><label>Làm tốt cộng</label><input id="pt" type="number" value="${S.pts.tot}"></div>
+  <div><label>Loại A từ điểm</label><input id="ga" type="number" value="${S.grade.A}"></div>
+  <div><label>Loại B từ điểm</label><input id="gb" type="number" value="${S.grade.B}"></div>
+  <div><label>Loại C từ điểm</label><input id="gc" type="number" value="${S.grade.C}"></div></div>
+  <div class="small" style="margin-top:6px">"Lần nhắc" được đếm theo từng người + từng loại lỗi trong cùng tháng.</div>
+  <label>Mã PIN mở app (để trống = không khoá)</label><input id="pinset" type="password" inputmode="numeric" placeholder="${S.pin?'Đã đặt – nhập mã mới để đổi':'Chưa đặt'}">
+  <button class="btn" id="ss">Lưu cài đặt</button></div>
+  <div class="card"><h3>Sao lưu / khôi phục</h3>
+  <div class="small">Dữ liệu chỉ nằm trong điện thoại này. Nên sao lưu mỗi tuần và chép file sang máy tính.${S.lastBackup?' Lần gần nhất: '+fmt(S.lastBackup)+'.':''}</div>
+  <button class="btn sm" id="bk">Sao lưu (.json)</button>
+  <button class="btn sm sec" id="rs">Khôi phục từ file</button>
+  <input type="file" id="rsf" accept=".json,application/json" hidden>
+  <button class="btn sm red" id="wipe">Xoá toàn bộ ghi nhận</button></div>
+  <div class="small" style="text-align:center">Dung lượng ảnh đã nén: ${(RECS.reduce((s,r)=>s+(r.photo?r.photo.size:0),0)/1048576).toFixed(1)} MB · ${RECS.length} ghi nhận</div>`;
+  $('#addd').onclick=()=>{collect();S.depts.push({id:'d'+Date.now(),name:'Bộ phận mới',staff:[],errors:['Lỗi khác']});saveS();vSet()};
+  view.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{if(confirm('Xoá bộ phận này khỏi danh sách? (Ghi nhận cũ vẫn giữ.)')){collect();S.depts.splice(+b.dataset.rm,1);saveS();vSet()}});
+  $('#ss').onclick=async()=>{
+    collect();
+    const n=id=>parseFloat($(id).value);
+    S.base=n('#pb')||100;S.pts={n1:n('#p1')||0,n2:n('#p2')||0,n3:n('#p3')||0,nang:n('#pn')||0,tot:n('#pt')||0};
+    S.grade={A:n('#ga')||90,B:n('#gb')||80,C:n('#gc')||70};
+    const p=$('#pinset').value.trim();if(p)S.pin=await hashPin(p);
+    saveS();toast('Đã lưu cài đặt');vSet();
+  };
+  $('#bk').onclick=async()=>{await backup();toast('Đã tạo file sao lưu');vSet()};
+  $('#rs').onclick=()=>$('#rsf').click();
+  $('#rsf').onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!confirm('Khôi phục sẽ THAY THẾ toàn bộ dữ liệu hiện tại. Tiếp tục?'))return;
+    try{await restore(f);toast('Đã khôi phục');vSet()}catch(err){toast('Lỗi: '+err.message)}};
+  $('#wipe').onclick=async()=>{if(confirm('Xoá TOÀN BỘ ghi nhận và ảnh? Hãy sao lưu trước. Không thể khôi phục.')&&confirm('Chắc chắn xoá hết?')){await dbClear();await reload();toast('Đã xoá');vSet()}};
+}
+function collect(){
+  view.querySelectorAll('#dl [data-i]').forEach(el=>{
+    const d=S.depts[+el.dataset.i];if(!d)return;
+    d.name=el.querySelector('.dn').value.trim()||d.name;
+    const lines=t=>t.split('\n').map(s=>s.trim()).filter(Boolean);
+    d.staff=lines(el.querySelector('.ds').value);d.errors=lines(el.querySelector('.de').value);
+  });
+}
+
+/* ---------- PIN ---------- */
+async function hashPin(p){
+  if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('ksnk:'+p));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+  let h=5381;for(const ch of 'ksnk:'+p)h=((h<<5)+h+ch.charCodeAt(0))>>>0;return 'x'+h;
+}
+function lockIfNeeded(){
+  if(!S.pin)return;
+  $('#lock').style.display='flex';
+  $('#pinok').onclick=async()=>{
+    if(await hashPin($('#pin').value.trim())===S.pin){$('#lock').style.display='none';$('#pin').value='';$('#pinerr').textContent=''}
+    else $('#pinerr').textContent='Sai mã PIN';
+  };
+}
+
+/* ---------- khởi động ---------- */
+(async()=>{
+  try{await openDB();await reload()}catch(e){view.innerHTML='<div class="card">Trình duyệt không cho phép lưu dữ liệu: '+esc(e.message)+'</div>';return}
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  lockIfNeeded();setTab('add');
+  if('serviceWorker'in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>

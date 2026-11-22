@@ -1,0 +1,16 @@
+{
+  "name": "Nhật ký KSNK",
+  "short_name": "KSNK",
+  "description": "Ghi nhận nhắc nhở, hình ảnh và điểm của nhân viên các bộ phận",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f766e",
+  "theme_color": "#0f766e",
+  "lang": "vi",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
