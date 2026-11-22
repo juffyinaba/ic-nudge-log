@@ -124,7 +124,7 @@ const TYPES=[['dat','Đạt','#16a34a'],['nhac','Nhắc nhở','#d97706'],['nang
 const tinfo=k=>TYPES.find(t=>t[0]===k)||TYPES[0];
 function calc(type,dept,who,error,ts){
   const P=S.pts;let count=0,pts=0;
-  const same=RECS.filter(r=>(r.type==='nhac'||r.type==='nang')&&r.dept===dept&&r.who===who&&r.error===error&&mkey(r.ts)===mkey(ts));
+  const same=RECS.filter(r=>(r.type==='nhac'||r.type==='nang')&&(who===GENERAL?r.dept===dept:true)&&r.who===who&&r.error===error&&mkey(r.ts)===mkey(ts));
   if(type==='nhac'){count=same.length+1;pts=-(count===1?P.n1:count===2?P.n2:P.n3)}
   else if(type==='nang'){count=same.length+1;pts=-P.nang}
   else if(type==='tot'){pts=P.tot}
@@ -309,36 +309,68 @@ function vHist(){
 let HM='',HD='';
 $('#ov').onclick=()=>{$('#ov').style.display='none';$('#ovimg').src=''};
 
-function statsOf(list){
+const fp=p=>(p>0?'+':'')+p;
+function personRows(list){
   const m=new Map();
   for(const r of list){
-    const k=r.dept+'\u0001'+r.who;
-    if(!m.has(k))m.set(k,{dept:r.dept,who:r.who,nhac:0,nang:0,tot:0,pts:0});
+    const gen=r.who===GENERAL;
+    const k=gen?r.dept+'\u0001'+GENERAL:r.who;
+    if(!m.has(k))m.set(k,{who:r.who,gen,nhac:0,nang:0,tot:0,pts:0,depts:{},errs:{}});
     const o=m.get(k);
-    if(r.type==='nhac')o.nhac++;else if(r.type==='nang')o.nang++;else if(r.type==='tot')o.tot++;
-    o.pts+=r.pts||0;
+    const d=o.depts[r.dept]||(o.depts[r.dept]={nhac:0,nang:0,tot:0,pts:0});
+    for(const t of [o,d]){
+      if(r.type==='nhac')t.nhac++;else if(r.type==='nang')t.nang++;else if(r.type==='tot')t.tot++;
+      t.pts+=r.pts||0;
+    }
+    if(r.error&&(r.type==='nhac'||r.type==='nang')){
+      const ek=r.dept+'\u0001'+r.error;
+      const e=o.errs[ek]||(o.errs[ek]={dept:r.dept,error:r.error,n:0,pts:0});
+      e.n++;e.pts+=r.pts||0;
+    }
   }
   return [...m.values()].map(o=>(o.score=S.base+o.pts,o.grade=gradeOf(o.score),o)).sort((a,b)=>a.score-b.score);
 }
-let SM='';
+let SM='',SP='';
 function vStat(){
   const ms=months();if(!SM||(SM!=='all'&&!ms.includes(SM)))SM=ms[0];
-  const list=sel(SM);
-  const st=statsOf(list);
+  const all=sel(SM);
+  const names=[...new Set(all.filter(r=>r.who!==GENERAL).map(r=>r.who))].sort((a,b)=>a.localeCompare(b,'vi'));
+  if(SP&&!names.includes(SP))SP='';
+  const list=SP?all.filter(r=>r.who===SP):all;
+  const rows=personRows(list);
   const byErr={};list.filter(r=>r.type==='nhac'||r.type==='nang').forEach(r=>{const k=r.dept+' – '+r.error;byErr[k]=(byErr[k]||0)+1});
   const errs=Object.entries(byErr).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const depts={};list.forEach(r=>{const d=depts[r.dept]||(depts[r.dept]={nhac:0,nang:0,tot:0,dat:0,ghi:0});d[r.type]++});
-  view.innerHTML=`<div class="card"><select id="sm"><option value="all" ${SM==='all'?'selected':''}>Tất cả thời gian</option>${ms.map(m=>`<option ${m===SM?'selected':''}>${m}</option>`).join('')}</select>
-    <div class="small" style="margin-top:6px">Điểm gốc ${S.base}. Loại A ≥${S.grade.A}, B ≥${S.grade.B}, C ≥${S.grade.C}, còn lại D.</div></div>
+  let who='';
+  if(SP&&rows.length){
+    const o=rows[0];
+    const dl=Object.entries(o.depts);
+    const el=Object.values(o.errs).sort((a,b)=>a.pts-b.pts);
+    who=`<div class="card"><h3>${esc(SP)}</h3>
+      <div style="font-size:15px">Tổng điểm: <b>${o.score}</b> (gốc ${S.base}, ${fp(o.pts)}) · Loại <b>${o.grade}</b></div>
+      <div class="small">Nhắc ${o.nhac} · Vi phạm nặng ${o.nang} · Làm tốt ${o.tot}</div>
+      <h3 style="margin-top:12px">Điểm theo bộ phận</h3>
+      <table><tr><th>Bộ phận</th><th class="n">Nhắc</th><th class="n">Nặng</th><th class="n">Tốt</th><th class="n">Điểm</th></tr>
+      ${dl.map(([k,x])=>`<tr><td>${esc(k)}</td><td class="n">${x.nhac}</td><td class="n">${x.nang}</td><td class="n">${x.tot}</td><td class="n"><b>${fp(x.pts)}</b></td></tr>`).join('')}
+      <tr><td><b>Tổng</b></td><td class="n">${o.nhac}</td><td class="n">${o.nang}</td><td class="n">${o.tot}</td><td class="n"><b>${fp(o.pts)}</b></td></tr></table>
+      <h3 style="margin-top:12px">Các lỗi bị trừ điểm</h3>
+      ${el.map(e=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #e2e8f0"><span>${esc(e.dept)} – ${esc(e.error)}<span class="small"> · ${e.n} lần</span></span><b>${fp(e.pts)}</b></div>`).join('')||'<div class="small">Không có lỗi bị trừ điểm</div>'}</div>`;
+  }
+  view.innerHTML=`<div class="card grid2"><select id="sm"><option value="all" ${SM==='all'?'selected':''}>Tất cả thời gian</option>${ms.map(m=>`<option ${m===SM?'selected':''}>${m}</option>`).join('')}</select>
+    <select id="sp"><option value="">Mọi người</option>${names.map(n=>`<option ${n===SP?'selected':''}>${esc(n)}</option>`).join('')}</select>
+    <div class="small" style="grid-column:1/-1">Điểm gốc ${S.base}. Loại A ≥${S.grade.A}, B ≥${S.grade.B}, C ≥${S.grade.C}, còn lại D. Một người làm nhiều bộ phận được cộng dồn thành một tổng điểm.</div></div>
+  ${who}
   <div class="card"><h3>Theo bộ phận</h3><table><tr><th>Bộ phận</th><th class="n">Nhắc</th><th class="n">Nặng</th><th class="n">Tốt</th><th class="n">Đạt</th></tr>
   ${Object.entries(depts).map(([k,d])=>`<tr><td>${esc(k)}</td><td class="n">${d.nhac}</td><td class="n">${d.nang}</td><td class="n">${d.tot}</td><td class="n">${d.dat}</td></tr>`).join('')||'<tr><td colspan="5" class="small">Chưa có dữ liệu</td></tr>'}</table></div>
-  <div class="card"><h3>Theo người (điểm thấp lên trước)</h3><table><tr><th>Đối tượng</th><th class="n">Nhắc</th><th class="n">Nặng</th><th class="n">Điểm</th><th class="n">Loại</th></tr>
-  ${st.map(o=>`<tr><td>${esc(o.who)}<div class="small">${esc(o.dept)}</div></td><td class="n">${o.nhac}</td><td class="n">${o.nang}</td><td class="n">${o.score}</td><td class="n"><b>${o.grade}</b></td></tr>`).join('')||'<tr><td colspan="5" class="small">Chưa có dữ liệu</td></tr>'}</table></div>
+  ${SP?'':`<div class="card"><h3>Theo người (điểm thấp lên trước)</h3><table><tr><th>Đối tượng</th><th class="n">Nhắc</th><th class="n">Nặng</th><th class="n">Điểm</th><th class="n">Loại</th></tr>
+  ${rows.map(o=>`<tr><td>${esc(o.who)}${Object.entries(o.depts).map(([k,x])=>`<div class="small">${esc(k)}: ${fp(x.pts)} (${x.nhac+x.nang} lỗi)</div>`).join('')}</td><td class="n">${o.nhac}</td><td class="n">${o.nang}</td><td class="n">${o.score}</td><td class="n"><b>${o.grade}</b></td></tr>`).join('')||'<tr><td colspan="5" class="small">Chưa có dữ liệu</td></tr>'}</table>
+  <div class="small" style="margin-top:6px">Chọn tên ở ô "Mọi người" phía trên để xem chi tiết từng người.</div></div>`}
   <div class="card"><h3>Lỗi hay gặp</h3>${errs.map(([k,n])=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #e2e8f0"><span>${esc(k)}</span><b>${n}</b></div>`).join('')||'<div class="small">Chưa có</div>'}</div>
   <div class="card"><h3>Xuất để báo cáo / họp</h3>
   <button class="btn sm" id="x1">Danh sách (Excel .csv)</button>
   <button class="btn sm sec" id="x2">Ảnh + danh sách (.zip)</button></div>`;
   $('#sm').onchange=e=>{SM=e.target.value;vStat()};
+  $('#sp').onchange=e=>{SP=e.target.value;vStat()};
   $('#x1').onclick=()=>exportCSV(SM);
   $('#x2').onclick=async()=>{toast('Đang nén ảnh...');await exportZip(SM)};
 }
