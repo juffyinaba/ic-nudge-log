@@ -29,7 +29,7 @@ textarea{min-height:70px}
 .pv{font-weight:600;padding:8px 10px;border-radius:8px;background:#ecfdf5;margin-top:10px}
 .pv.bad{background:#fef2f2;color:#b91c1c}
 .photo{width:100%;max-height:260px;object-fit:contain;border-radius:8px;margin-top:8px;background:#e2e8f0}
-.el{margin:4px 0 8px;padding-left:20px;font-size:13px}
+.el{margin:4px 0 8px;padding-left:0;list-style:none;font-size:13px}
 .el li{margin:5px 0}
 .erow{display:flex;gap:8px;align-items:center}
 .erow .t{flex:1;min-width:0;line-height:1.4;word-break:break-word}
@@ -446,7 +446,7 @@ function vSet(){
     <label>Tên bộ phận</label><input class="dn" value="${esc(d.name)}">
     <label>Nhân viên (mỗi dòng một tên)</label><textarea class="ds">${esc(d.staff.join('\n'))}</textarea>
     <label>Các loại lỗi (mỗi dòng một mục)</label>
-    <ul class="el">${d.errors.map((er,j)=>`<li class="${EDIT&&EDIT.i===i&&EDIT.text===er?'editing':''}"><div class="erow"><button type="button" class="gr" data-gr="${i}" aria-label="Kéo để di chuyển"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.8"/><circle cx="15" cy="6" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="18" r="1.8"/><circle cx="15" cy="18" r="1.8"/></svg></button><span class="t">${esc(er)}</span><span class="act"><button type="button" class="xe ed" data-ed="${i}:${j}" aria-label="Sửa lỗi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button type="button" class="xe del" data-xe="${i}:${j}" aria-label="Xoá lỗi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div></li>`).join('')||'<li class="small" style="list-style:none;margin-left:-18px">Chưa có lỗi nào</li>'}</ul>
+    <ul class="el">${d.errors.map((er,j)=>`<li class="${EDIT&&EDIT.i===i&&EDIT.text===er?'editing':''}"><div class="erow"><button type="button" class="gr" data-gr="${i}" aria-label="Kéo để di chuyển"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.8"/><circle cx="15" cy="6" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="18" r="1.8"/><circle cx="15" cy="18" r="1.8"/></svg></button><span class="t">${esc(er)}</span><span class="act"><button type="button" class="xe ed" data-ed="${i}:${j}" aria-label="Sửa lỗi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button type="button" class="xe del" data-xe="${i}:${j}" aria-label="Xoá lỗi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span></div></li>`).join('')||'<li class="small">Chưa có lỗi nào</li>'}</ul>
     <div class="addrow"><textarea class="de" placeholder="Nhập lỗi mới, mỗi dòng một lỗi, rồi bấm +"></textarea><button class="plus" data-pe="${i}" aria-label="Thêm lỗi">+</button></div>
     <button class="btn sm red" data-rm="${i}">Xoá bộ phận này</button></div>`).join('')}</div>
   <button class="btn sm sec" id="addd">+ Thêm bộ phận</button></div>
@@ -461,8 +461,7 @@ function vSet(){
   <div><label>Loại B từ điểm</label><input id="gb" type="number" value="${S.grade.B}"></div>
   <div><label>Loại C từ điểm</label><input id="gc" type="number" value="${S.grade.C}"></div></div>
   <div class="small" style="margin-top:6px">"Lần nhắc" được đếm theo từng người + từng loại lỗi trong cùng tháng.</div>
-  <label>Mã PIN mở app (để trống = không khoá)</label><input id="pinset" type="password" inputmode="numeric" placeholder="${S.pin?'Đã đặt – nhập mã mới để đổi':'Chưa đặt'}">
-  <button type="button" class="btn sec" id="pinclr" style="margin-top:8px"${S.pin?'':' disabled'}>Xóa PIN</button>
+  <label>Mã PIN mở app (để trống = không khoá)</label><div class="addrow" style="align-items:stretch"><input id="pinset" type="password" inputmode="numeric" placeholder="${S.pin?'Đã đặt – nhập mã mới để đổi':'Chưa đặt'}"><button type="button" class="btn sec" id="pinclr" style="width:auto;margin:0;padding:0 16px;white-space:nowrap"${S.pin?'':' disabled'}>Xóa PIN</button></div>
   <button class="btn" id="ss">Lưu cài đặt</button></div>
   <div class="card"><h3>Sao lưu / khôi phục</h3>
   <div class="small">Dữ liệu chỉ nằm trong điện thoại này. Nên sao lưu mỗi tuần và chép file sang máy tính.${S.lastBackup?' Lần gần nhất: '+fmt(S.lastBackup)+'.':''}</div>
